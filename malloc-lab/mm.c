@@ -49,9 +49,40 @@ team_t team = {
 
 /* rounds up to the nearest multiple of ALIGNMENT */
 /* ALIGNMENT의 가장 가까운 배수로 올림합니다 */
+
+// 매크로: #define으로 만드는 문자열 치환 규칙, 컴파일 전에 코드를 바꿔주는 치환 규칙임 
+// 함수 X, 상수 정의, 짧은 코드 표현, 조건부 컴파일 등에 쓰임 
+// size를 ALIGNMENT 단위로 올림해서 메모리 정렬된 크기(특정 바이트 단위 경계에 맞춘 크기)로 만드는 매크로 
+// (size) + (ALIGNMENT - 1): 필요한 크기를 정렬 경계보다 조금 크게 더함 -> 올림 
+// --- 
+// 0x7: 이진수 0000 0111
+// ~: 비트를 뒤집는 연산자 
+// -> ~0x7 = 1111 1000(0을 1로 바꾸고 1을 0으로 바꾸는 것, 순서를 뒤집는 것이 X) 
+// &~0x7 => 어떤 수의 맨 아래 3비트를 0으로 만드는 비트 마스크
+// 8 = 2^3 = 마지막 3비트가 000임 = 마지막 3비트가 000이면 무조건 8의 배수 
+// & 연산자: x & ~0x7 -> x의 비트와 ~0x7 비트 한자리씩 비교해서 둘 다 1이면 1, 둘 다 1이 아니거나/둘 중 하나만 1이면 0
+// -> ~0x7 마지막 3 비트가 000이라 & 연산하면 나오는 값도 무조건 마지막 3비트 000임 => 특정 비트만 남기고, 특정 비트는 지우는 역할
+// => size를 8바이트 배수로 맞춤 
+// --- 
+// ex) size = 27 = 0001 1011
+// 0001 1011 // 27 이진수 (size) + (ALIGNMENT - 1)
+// 1111 1000 // ~0x7 이진수 ~0x7
+// --------- // & 연산
+// 0001 1000 // 최종 size
+// ex) size = 20 -> size + (ALIGNMENT - 1) = 27 -> 27과 가장 가까운 8의 배수 = 24
 #define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+
+// 1 word == 4byte
+// header 1 byte, footer 1 byte, pred pointer 1 byte, succ pointer 1 byte = total 4 byte
+
+// WSIZE = 4byte -> CPU가 한 번에 읽고 쓰는 기본 덩어리가 4byte라서 1 word = 4 byte
+#define WSIZE 4
+
+// DSIZE = 8byte -> 기본 단위 워드를 두 개를 합친 8 byte도 CPU가 한 번에 읽고 쓰기 쉽기 때문에 DSIZE로 8 byte 정의 
+// -> DSIZE = 2 word 
+#define DSIZE 8
 
 /*
  * mm_init - initialize the malloc package.
@@ -59,7 +90,16 @@ team_t team = {
  */
 int mm_init(void)
 {
-    mem_sbrk(4 * newsize);
+    // 힙 영역 만들기
+    // 힙 생성 실패로 -1 반환하면 mm_init도 -1 반환 및 종료
+    if(sbrk(WSIZE) == -1)
+    {
+        return -1;
+    }
+
+    // PUT 매크로
+    // PACK 매크로
+    // GET 매크로 
 
     return 0;
 }
