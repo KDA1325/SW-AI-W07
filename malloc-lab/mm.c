@@ -33,11 +33,11 @@
  ********************************************************/
 team_t team = {
     /* Team name */ /* 팀 이름 */
-    "ateam",
+    "다때",
     /* First member's full name */ /* 첫 번째 팀원의 전체 이름 */
-    "Harry Bovik",
+    "Daae Kim",
     /* First member's email address */ /* 첫 번째 팀원의 이메일 주소 */
-    "bovik@cs.cmu.edu",
+    "pb.kimdaae@gmail.com",
     /* Second member's full name (leave blank if none) */ /* 두 번째 팀원의 전체 이름 (없으면 비워두기) */
     "",
     /* Second member's email address (leave blank if none) */ /* 두 번째 팀원의 이메일 주소 (없으면 비워두기) */
@@ -59,6 +59,8 @@ team_t team = {
  */
 int mm_init(void)
 {
+    mem_sbrk(4 * newsize);
+
     return 0;
 }
 
