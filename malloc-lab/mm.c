@@ -84,6 +84,16 @@ team_t team = {
 // -> DSIZE = 2 word 
 #define DSIZE 8
 
+// OS에게 추가로 요청할 힙 메모리의 기본 크기
+// -> 할당기 첫 기작 때 CHUNKSIZE 만큼 힙을 늘려 초기 빈 블록 세팅
+// -> 사용자의 malloc 요청 할당할 공간이 없을 때 sbrk 함수 호출해서 CHUNKSIZE 만큼 힙을 늘려줌
+// => 사용자의 요청 때마다 작은 공간들을 바로바로 늘려줌 X, 분할해서 쓰도록 아예 큰 뭉텅이 하나로 늘려줌 
+// ---
+// 1<<12: 비트 연산, 1을 왼쪽으로 12칸 이동 
+// 1: 0000 0001
+// 1을 왼쪽으로 12칸 이동: 0001 0000 0000 0000 = 2^12 = 10진수 4096 = 4096 bytes = 4KB 
+#define CHUNKSIZE (1 << 12)
+
 /*
  * mm_init - initialize the malloc package.
  * mm_init - malloc 패키지를 초기화합니다.
