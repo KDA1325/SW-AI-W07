@@ -67,7 +67,7 @@ void mem_reset_brk()
  *    this model, the heap cannot be shrunk.
  */
 // OS한테 힙 영역을 할당 받음
-// mem_start_brk 범위 안에서 추가 가능
+// mem_max_addr 범위 안에서 추가 가능
 // incr 매개변수 만큼 메모리 추가 할당 요청 
 void *mem_sbrk(int incr) 
 {
@@ -77,7 +77,8 @@ void *mem_sbrk(int incr)
     // mem_brk가 증가됨 -> old_brk 주소를 반환해서 old_brk부터 mem_brk를 사용할 수 있게 함 
     char *old_brk = mem_brk;
 
-    // incr 0 이거나 (mem_brk + incr)이 메모리 값보다 크면 -1 반환 
+    // incr  음수이거나 (mem_brk + incr)이 메모리 값보다 크면 -1 반환 
+    // srbk(0)은 현재의 힙 끝 주소만 알아낼 때 사용 
     if ( (incr < 0) || ((mem_brk + incr) > mem_max_addr)) {
 	errno = ENOMEM;
 	fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
