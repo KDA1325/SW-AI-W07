@@ -94,6 +94,10 @@ team_t team = {
 // 1을 왼쪽으로 12칸 이동: 0001 0000 0000 0000 = 2^12 = 10진수 4096 = 4096 bytes = 4KB 
 #define CHUNKSIZE (1 << 12)
 
+// size 비트 값과 alloc(할당 여부) 비트 값을 하나의 값으로 통합하는 매크로
+// -> 통합된 값을 헤더, 푸터에 넣음 
+// size, alloc 둘 중 하나라도 1이면 1, 둘 다 0이면 0 
+#define PACK(size, alloc) ((size) | (alloc))
 /*
  * mm_init - initialize the malloc package.
  * mm_init - malloc 패키지를 초기화합니다.
@@ -107,9 +111,9 @@ int mm_init(void)
         return -1;
     }
 
-    // PUT 매크로
     // PACK 매크로
     // GET 매크로 
+    // PUT 매크로
 
     return 0;
 }
