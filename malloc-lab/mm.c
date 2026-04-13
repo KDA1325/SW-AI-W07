@@ -41,7 +41,27 @@ team_t team = {
     /* Second member's full name (leave blank if none) */ /* 두 번째 팀원의 전체 이름 (없으면 비워두기) */
     "",
     /* Second member's email address (leave blank if none) */ /* 두 번째 팀원의 이메일 주소 (없으면 비워두기) */
-    ""};
+    ""
+};
+
+/*
+전처리기로 연산 수식을 정의하는 이유
+
+전처리기는 컴파일 타임에 치환되는 거라 런타임 중엔 작동하지 않음
+-> 포인터는 런타임 중 블록을 이동할 때마다, 혹은 해당 포인터가 필요한 작업을 할 때마다 연산으로 구해져야 하는데 왜 전처리기로 연산 수식을 정의해둘까?
+=> 전처리기로 컴파일 타임에 주소값을 미리 계산하는 개념이 아니라서.
+
+전처리기가 컴파일 전에 하는 작업은 단순한 텍스트 치환 뿐
+런타임 중 마주하는 NEXT_BLKP(bp)라는 짧은 글자를 복잡한 포인터 계산 수식 텍스트로 바꿔치기만 하고 끝남
+-> 런타임에 힙에서 bp 값이 바뀌면 그때그때 바뀐 bp값을 바탕으로 CPU가 수식을 계산하는 실제 연산은 정상적으로 런타임에 수행됨
+
+그럼 왜 쓸까?
+
+
+
+*/
+
+
 
 /* single word (4) or double word (8) alignment */
 /* 워드(4바이트) 또는 더블 워드(8바이트) 정렬 */
@@ -108,8 +128,14 @@ team_t team = {
 // 주로 PACK 매크로를 통해 하나로 합쳐진 값을 각 블록 헤더, 푸터에 넣을 때 사용함 
 #define PUT(p, value) (*(unsigned int *) (p) = (val)) 
 
+// ---
+// OR: True 우선 연산 = 하나라도 True면 다 true
+// AND: False 우선 연산 = 하나라도 False면 다 False 
+// ---
+
 // GET(p)로 얻어온 각 블록 1워드 헤더, 푸터 값에서 비트 마스킹(&, AND 연산)을 통해 원하는 정보만 깔끔하게 분리
 // ~0x7 == 하위 세 비트 0, 나머진 1
+// ~: NOT , 0x7: x = 16진수 
 // -> 헤더, 푸터 값에서 하위 세 비트 0만 지워지고 온전한 블록 크기 값만 남김
 #define GET_SIZE(p) (GET(p) & ~0x7)
 
@@ -119,6 +145,7 @@ team_t team = {
 #define GET_ALLOC (GET(p) & 0x1)
 
 // --- HDRP & FTRP: 메모리 주소를 워드 단위로 연산해서 원하는 주소값을 찾아내는 매크로 ---
+// char * 타입 형변환: 주소값을 1바이트 단위로 더하고 빼기 위해 형변환 
 // HDRP: HeaDeR Pointer = 헤더 포인터의 약자  
 // 범용 포인터인 bp를 char* 타입으로 형 변환 
 // bp: 데이터가 들어가는 페이로드의 시작 주소 
@@ -133,6 +160,17 @@ team_t team = {
 // 푸터 시작 주소로 돌아오기 위해 다음 블록의 헤더 크기 1워드 + 푸터 크기 1워드 = 2워드 = DSIZE만큼 빼줌 
 // -> 연산이 끝나면 현재 블록의 푸터 시작 주소가 됨 
 #define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+
+// --- NEXT_BLKP & PREV_BLKP: 힙을 탐색하기 위해 현재 블록의 페이로드 포인터(bp)에서 인접한 다음이나 이전 블록의 bp로 점프하는 매크로 ---
+// NEXT_BLKP와 PREV_BLKP 연산에서 HDRP와 FTRP를 쓰지 않는 이유: NEXT_BLKP 연산에선 HDRP를 쓸 수 있지만 PREV_BLKP 연산에선 FTRP를 쓸 수 없기 때문
+// -> 사실 쓰든 안 쓰든 전처리기이기 때문에 성능에 차이가 전혀 없음 
+// 현재 블록 bp에서 1워드 빼기 -> 현재 블록의 헤더 위치 => 현재 블록의 크기를 읽음
+// 현재 bp 주소에 전체 크기 더함 -> 다음 블록의 페이로드 시작 주소(다음 블록의 bp)로 이동
+#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char*)(bp) - WSIZE)))
+
+// 현재 블록 bp에서 2워드 빼기 -> 이전 블록의 푸터 => 이전 블록의 크기를 읽음
+// 현재 bp에서 이전 블록의 크기만큼 빼기 -> 이전 블록의 페이로드 시작 주소로 이동 
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 /*
  * mm_init - initialize the malloc package.
