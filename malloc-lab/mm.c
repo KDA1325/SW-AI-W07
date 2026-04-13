@@ -99,13 +99,13 @@ team_t team = {
 // size, alloc 둘 중 하나라도 1이면 1, 둘 다 0이면 0 
 #define PACK(size, alloc) ((size) | (alloc))
 
-// 주어진 메모리 주소 P에서 1워드 크기 값을 읽어오는 매크로(unsigned int = 4byte = 1word)
+// 주어진 메모리 주소 p에서 1워드 크기 값을 읽어오는 매크로(unsigned int = 4byte = 1word)
 // 할당기에서 다루는 포인터 대부분은 void* 형이라 주소에 있는 값을 바로 가져올 수 없어서 형 변환 후 역참조 해야 값 가져올 수 있음 
 #define GET(p) (*(unsigned int *) (p))
 
-// 특정 메모리 주소p p 에 1워드 크기의 값 val을 직접 넣음 
+// 특정 메모리 주소p에 1워드 크기의 값 val을 직접 넣음 
 // GET과 마찬가지로 형 변환 후 역참조 해야 값을 바꿀 수 있음
-// 주로 PACK 매크로를 통해 하나로 합쳐진 값을 각 블록 헤더, 푸터에 넣을 떄 사용함 
+// 주로 PACK 매크로를 통해 하나로 합쳐진 값을 각 블록 헤더, 푸터에 넣을 때 사용함 
 #define PUT(p, value) (*(unsigned int *) (p) = (val)) 
 
 // GET(p)로 얻어온 각 블록 1워드 헤더, 푸터 값에서 비트 마스킹(&, AND 연산)을 통해 원하는 정보만 깔끔하게 분리
@@ -117,6 +117,22 @@ team_t team = {
 // 0x1 == 맨 마지막 비트만 1, 나머진 0
 // -> 앞의 블록 크기 정보를 지우고 맨 마지막 1비트짜리 할당 정보만 남김  
 #define GET_ALLOC (GET(p) & 0x1)
+
+// --- HDRP & FTRP: 메모리 주소를 워드 단위로 연산해서 원하는 주소값을 찾아내는 매크로 ---
+// HDRP: HeaDeR Pointer = 헤더 포인터의 약자  
+// 범용 포인터인 bp를 char* 타입으로 형 변환 
+// bp: 데이터가 들어가는 페이로드의 시작 주소 
+// 헤더: bp 바로 앞 1워드에 들어감(WSIZE)
+// => bp 주소에서 1워드 크기를 빼면 헤더의 시작 주소
+#define HDRP(bp) ((char *)(bp) - WSIZE)
+
+// FTRP: FooTeR Pointer = 푸터 포인터의 약자
+// 푸터: 블록 맨 끝 1워드 자리에 들어감
+// GET_SIZE: 위에서 구한 HDRP(bp)로 헤더를 찾아 현재 블록의 크기를 알아냄 
+// bp 주소에 현재 블록 크기 더함 -> 다음 블록의 헤더를 지나친 페이로드 시작 주소가 됨
+// 푸터 시작 주소로 돌아오기 위해 다음 블록의 헤더 크기 1워드 + 푸터 크기 1워드 = 2워드 = DSIZE만큼 빼줌 
+// -> 연산이 끝나면 현재 블록의 푸터 시작 주소가 됨 
+#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 /*
  * mm_init - initialize the malloc package.
