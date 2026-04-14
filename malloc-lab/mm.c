@@ -44,6 +44,12 @@ team_t team = {
     ""
 };
 
+// ---  탐색 방식 설정 ---
+//#define FIRST_FIT
+//#define NEXT_FIT
+#define BEST_FIT
+
+
 /*
 전처리기로 연산 수식을 정의하는 이유
 
@@ -290,17 +296,60 @@ static void *extend_heap(size_t words)
  *     Always allocate a block whose size is a multiple of the alignment.
  *     항상 정렬 단위의 배수 크기를 갖는 블록을 할당합니다.
  */
+// 요청이 들어올 때마다 무조건 mem_sbrk 호출해서 늘려주는 단순한 형태의 할당기
+// -> free 된 빈 공간을 재사용할 수 없음 
+// void *mm_malloc(size_t size)
+// {
+//     int newsize = ALIGN(size + SIZE_T_SIZE);
+
+//     void *p = mem_sbrk(newsize);
+
+//     if (p == (void *)-1)
+//         return NULL;
+//     else
+//     {
+//         *(size_t *)p = size;
+//         return (void *)((char *)p + SIZE_T_SIZE);
+//     }
+// }
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
+    size_t asize;
+    size_t extendsize;
+    char *bp;
+
+    // 의미 없는 요청 무시 
+    if(size == 0)
+    {
         return NULL;
+    }
+
+    if(size <= DSIZE)
+    {
+        asize = 2 * DSIZE;
+    }
     else
     {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+        asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
     }
+
+    // find_fit 
+    if((bp = find_fit(asize)) != NULL)
+    {
+        place(bp, asize);
+        return bp;
+    }
+    
+    extendsize = MAX(asize, CHUNKSIZE);
+
+    if((bp = extend_heap(extendsize/WSIZE)) == NULL)
+    {
+        return NULL;
+    }
+
+    place(bp, asize);
+
+    return bp;
 }
 
 /*
@@ -395,23 +444,127 @@ static void *coalesce(void *bp)
     return bp;
 }
 
+// 묵시적 가용 리스트에서 사용자의 요청 크기 asize에 맞는 빈 블록을 찾음
+static void *find_fit(size_t size)
+{
+    void *bp;
+
+#ifdef FIRST_FIT
+    // 힙 처음부터 탐색 시작
+    // 에필로그 블록을 만날 때까지(-> 크기가 0인 블록을 만날 때까지)
+    for(bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    {
+        // 할당되지 않은 블복 + 요청한 크기보다 블록의 크기가 크같다면
+        if(!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= size)
+        {
+            // 조건에 맞는 블록의 주소를 반환
+            return bp;
+        }
+    }
+#endif
+    
+#ifdef NEXT_FIT
+    
+#endif
+    
+#ifdef BEST_FIT
+    
+#endif
+
+    return NULL;
+}
+
+static void place(void *bp, size_t asize)
+{
+    size_t csize = GET_SIZE(HDRP(bp));
+
+    if((csize - asize) >= (2 * DSIZE))
+    {
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+        
+        bp = NEXT_BLKP(bp);
+        
+        PUT(HDRP(bp), PACK(csize - asize, 0));
+        PUT(FTRP(bp), PACK(csize - asize, 0));
+    }
+    else
+    {
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp), PACK(csize, 1));
+    }
+}
+
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  * mm_realloc - mm_malloc과 mm_free를 이용해 단순하게 구현됩니다.
  */
+// 기본으로 제공되는 realloc 함수 
+// 예외 처리 누락 -> prt이 NULL일 때 예외 처리를 하지 않아서 Segmentatoin fault 발생해 프로그램 죽음 
+// 잘못된 헤더 크기 계산 -> copySize: 포인터 연산으로 헤더 값을 그대로 읽어옴 
+// -> 헤더엔 크기 뿐 아니라 맨 끝에 할당 상태 비트 1도 함께 있어서 이걸 걸러내는 매크로를 사용해야 기존 블록 크기를 정확하게 구할 수 있음 
+// 비효율적인 무조건 복사 -> 호출되면 무조건 새 공간을 할당받고 데이터 복사해 처리 속도와 메모리 공간 모두 낭비 
+// void *mm_realloc(void *ptr, size_t size)
+// {
+//     void *oldptr = ptr;
+//     void *newptr;
+//     size_t copySize;
+
+//     newptr = mm_malloc(size);
+//     if (newptr == NULL)
+//         return NULL;
+//     copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+//     if (size < copySize)
+//         copySize = size;
+//     memcpy(newptr, oldptr, copySize);
+//     mm_free(oldptr);
+//     return newptr;
+// }
+
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
+    char *bp;
     size_t copySize;
 
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
+    // ptr NULL 확인
+    if(ptr == NULL)
+    {
+        return mm_malloc(size);
+    }
+
+    if(size == 0)
+    {
+        mm_free(ptr);
+        
+        return NULL; 
+    }
+
+    // 새 공간 할당
+    if((bp = mm_malloc(size)) == NULL)
+    {
         return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
+    }
+
+    // 기존 블록에 들어있던 데이터 크기와 새로 요청한 크기 중 더 작은 값만큼만 기존 데이터를 새 공간으로 복사 
+    // GET_SIZE: 헤더와 푸터를 포함한 전체 블록 크기 반환
+    // DSIZE: 2워드 = 헤더 + 푸터 합산 크기 
+    // -> GET_SIZE - DSIZE = 실제 데이터가 들어있는 페이로드의 크기
+    if((GET_SIZE(HDRP(ptr)) - DSIZE) > size)
+    {
         copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    }
+    else
+    {
+        copySize = (GET_SIZE(HDRP(ptr)) - DSIZE);
+    }
+    
+    // 데이터 복사
+    // memcpy 활용 
+    memcpy(bp, ptr, copySize);    
+
+    // 기존 공간 해제 
+    mm_free(ptr);
+
+    // 새 블록의 주소 반환 
+    return bp;
 }
